@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Type } from '@vendure/common/lib/shared-types';
+import { isObject } from '@vendure/common/lib/shared-utils';
 import { unique } from '@vendure/common/lib/unique';
 
 import { RequestContext } from '../../../api/common/request-context';
@@ -21,7 +22,7 @@ import { HydrateOptions } from './entity-hydrator-types';
  *
  * @example
  * ```TypeScript
- * const product = this.productVariantService
+ * const product = await this.productVariantService
  *   .getProductForVariant(ctx, variantId);
  *
  * await this.entityHydrator
@@ -35,6 +36,17 @@ import { HydrateOptions } from './entity-hydrator-types';
  * translatable entities (e.g. Product, Collection, Facet), and if the `applyProductVariantPrices`
  * options is used (see {@link HydrateOptions}), any related ProductVariant will have the correct
  * Channel-specific prices applied to them.
+ *
+ * Custom field relations may also be hydrated:
+ *
+ * @example
+ * ```TypeScript
+ * const customer = await this.customerService
+ *   .findOne(ctx, id);
+ *
+ * await this.entityHydrator
+ *   .hydrate(ctx, customer, { relations: ['customFields.avatar' ]});
+ * ```
  *
  * @docsCategory data-access
  * @since 1.3.0
@@ -89,7 +101,7 @@ export class EntityHydrator {
                     });
                 const propertiesToAdd = unique(missingRelations.map(relation => relation.split('.')[0]));
                 for (const prop of propertiesToAdd) {
-                    (target as any)[prop] = (hydrated as any)[prop];
+                    (target as any)[prop] = this.mergeDeep((target as any)[prop], (hydrated as any)[prop]);
                 }
 
                 const relationsWithEntities = missingRelations.map(relation => ({
@@ -155,7 +167,7 @@ export class EntityHydrator {
         const missingRelations: string[] = [];
         for (const relation of options.relations.slice().sort()) {
             if (typeof relation === 'string') {
-                const parts = relation.split('.');
+                const parts = !relation.startsWith('customFields') ? relation.split('.') : [relation];
                 let entity: Record<string, any> | undefined = target;
                 const path = [];
                 for (const part of parts) {
@@ -240,5 +252,31 @@ export class EntityHydrator {
         return Array.isArray(input)
             ? input[0]?.hasOwnProperty('translations') ?? false
             : input?.hasOwnProperty('translations') ?? false;
+    }
+
+    /**
+     * Merges properties into a target entity. This is needed for the cases in which a
+     * property already exists on the target, but the hydrated version also contains that
+     * property with a different set of properties. This prevents the original target
+     * entity from having data overwritten.
+     */
+    private mergeDeep<T extends { [key: string]: any }>(a: T | undefined, b: T): T {
+        if (!a) {
+            return b;
+        }
+        for (const [key, value] of Object.entries(b)) {
+            if (Object.getOwnPropertyDescriptor(b, key)?.writable) {
+                if (Array.isArray(value)) {
+                    (a as any)[key] = value.map((v, index) =>
+                        this.mergeDeep(a?.[key]?.[index], b[key][index]),
+                    );
+                } else if (isObject(value)) {
+                    (a as any)[key] = this.mergeDeep(a?.[key], b[key]);
+                } else {
+                    (a as any)[key] = b[key];
+                }
+            }
+        }
+        return a ?? b;
     }
 }

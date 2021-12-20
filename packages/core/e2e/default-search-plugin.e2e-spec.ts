@@ -7,7 +7,13 @@ import {
     facetValueCollectionFilter,
     mergeConfig,
 } from '@vendure/core';
-import { createTestEnvironment, E2E_DEFAULT_CHANNEL_TOKEN, SimpleGraphQLClient } from '@vendure/testing';
+import {
+    createTestEnvironment,
+    E2E_DEFAULT_CHANNEL_TOKEN,
+    registerInitializer,
+    SimpleGraphQLClient,
+    SqljsInitializer,
+} from '@vendure/testing';
 import gql from 'graphql-tag';
 import path from 'path';
 
@@ -67,6 +73,8 @@ import {
 import { SEARCH_PRODUCTS_SHOP } from './graphql/shop-definitions';
 import { awaitRunningJobs } from './utils/await-running-jobs';
 
+registerInitializer('sqljs', new SqljsInitializer(path.join(__dirname, '__data__'), 1000));
+
 // Some of these tests have many steps and can timeout
 // on the default of 5s.
 jest.setTimeout(10000);
@@ -83,7 +91,6 @@ interface SearchProductShopVariables extends SearchProductsShop.Variables {
 describe('Default search plugin', () => {
     const { server, adminClient, shopClient } = createTestEnvironment(
         mergeConfig(testConfig(), {
-            logger: new DefaultLogger(),
             plugins: [DefaultSearchPlugin.init({ indexStockStatus: true }), DefaultJobQueuePlugin],
         }),
     );
@@ -95,11 +102,10 @@ describe('Default search plugin', () => {
             customerCount: 1,
         });
         await adminClient.asSuperAdmin();
-        if (testConfig().dbConnectionOptions.type === 'mysql') {
-            // Mysql seems to occasionally run into some kind of race condition
-            // relating to the populating of data, so we add a pause here.
-            await new Promise(resolve => setTimeout(resolve, 10000));
-        }
+
+        // A precaution against a race condition in which the index
+        // rebuild is not completed in time for the first test.
+        await new Promise(resolve => setTimeout(resolve, 5000));
     }, TEST_SETUP_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -201,6 +207,22 @@ describe('Default search plugin', () => {
             'Instant Camera',
             'Slr Camera',
         ]);
+    }
+
+    async function testMatchPartialSearchTerm(client: SimpleGraphQLClient) {
+        const result = await client.query<SearchProductsShop.Query, SearchProductShopVariables>(
+            SEARCH_PRODUCTS_SHOP,
+            {
+                input: {
+                    term: 'lap',
+                    groupByProduct: true,
+                    sort: {
+                        name: SortOrder.ASC,
+                    },
+                },
+            },
+        );
+        expect(result.search.items.map(i => i.productName)).toEqual(['Laptop']);
     }
 
     async function testMatchFacetIdsAnd(client: SimpleGraphQLClient) {
@@ -462,6 +484,8 @@ describe('Default search plugin', () => {
 
         it('matches search term', () => testMatchSearchTerm(shopClient));
 
+        it('matches partial search term', () => testMatchPartialSearchTerm(shopClient));
+
         it('matches by facetId with AND operator', () => testMatchFacetIdsAnd(shopClient));
 
         it('matches by facetId with OR operator', () => testMatchFacetIdsOr(shopClient));
@@ -521,6 +545,23 @@ describe('Default search plugin', () => {
                 { count: 7, facetValue: { id: 'T_4', name: 'sports equipment' } },
                 { count: 3, facetValue: { id: 'T_5', name: 'home & garden' } },
                 { count: 3, facetValue: { id: 'T_6', name: 'plants' } },
+            ]);
+        });
+
+        // https://github.com/vendure-ecommerce/vendure/issues/1236
+        it('returns correct facetValues when not grouped by product, with search term', async () => {
+            const result = await shopClient.query<SearchFacetValues.Query, SearchFacetValues.Variables>(
+                SEARCH_GET_FACET_VALUES,
+                {
+                    input: {
+                        groupByProduct: false,
+                        term: 'laptop',
+                    },
+                },
+            );
+            expect(result.search.facetValues).toEqual([
+                { count: 4, facetValue: { id: 'T_1', name: 'electronics' } },
+                { count: 4, facetValue: { id: 'T_2', name: 'computers' } },
             ]);
         });
 
@@ -741,6 +782,8 @@ describe('Default search plugin', () => {
         it('no grouping', () => testNoGrouping(adminClient));
 
         it('matches search term', () => testMatchSearchTerm(adminClient));
+
+        it('matches partial search term', () => testMatchPartialSearchTerm(adminClient));
 
         it('matches by facetId with AND operator', () => testMatchFacetIdsAnd(adminClient));
 

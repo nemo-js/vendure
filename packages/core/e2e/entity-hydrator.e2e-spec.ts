@@ -8,7 +8,9 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { testConfig, TEST_SETUP_TIMEOUT_MS } from '../../../e2e-common/test-config';
 
 import { HydrationTestPlugin } from './fixtures/test-plugins/hydration-test-plugin';
+import { UpdateChannel } from './graphql/generated-e2e-admin-types';
 import { AddItemToOrder, UpdatedOrderFragment } from './graphql/generated-e2e-shop-types';
+import { UPDATE_CHANNEL } from './graphql/shared-definitions';
 import { ADD_ITEM_TO_ORDER } from './graphql/shop-definitions';
 
 const orderResultGuard: ErrorResultGuard<UpdatedOrderFragment> = createErrorResultGuard(
@@ -167,6 +169,48 @@ describe('Entity hydration', () => {
         expect(hydrateOrder.id).toBe('T_1');
         expect(hydrateOrder.payments).toEqual([]);
     });
+
+    // https://github.com/vendure-ecommerce/vendure/issues/1229
+    it('deep merges existing properties', async () => {
+        await shopClient.asAnonymousUser();
+        const { addItemToOrder } = await shopClient.query<AddItemToOrder.Mutation, AddItemToOrder.Variables>(
+            ADD_ITEM_TO_ORDER,
+            {
+                productVariantId: 'T_1',
+                quantity: 2,
+            },
+        );
+        orderResultGuard.assertSuccess(addItemToOrder);
+
+        const { hydrateOrderReturnQuantities } = await adminClient.query<{
+            hydrateOrderReturnQuantities: number[];
+        }>(GET_HYDRATED_ORDER_QUANTITIES, {
+            id: addItemToOrder.id,
+        });
+
+        expect(hydrateOrderReturnQuantities).toEqual([2]);
+    });
+
+    // https://github.com/vendure-ecommerce/vendure/issues/1284
+    it('hydrates custom field relations', async () => {
+        await adminClient.query<UpdateChannel.Mutation, UpdateChannel.Variables>(UPDATE_CHANNEL, {
+            input: {
+                id: 'T_1',
+                customFields: {
+                    thumbId: 'T_2',
+                },
+            },
+        });
+
+        const { hydrateChannel } = await adminClient.query<{
+            hydrateChannel: any;
+        }>(GET_HYDRATED_CHANNEL, {
+            id: 'T_1',
+        });
+
+        expect(hydrateChannel.customFields.thumb).toBeDefined();
+        expect(hydrateChannel.customFields.thumb.id).toBe('T_2');
+    });
 });
 
 function getVariantWithName(product: Product, name: string) {
@@ -193,5 +237,16 @@ const GET_HYDRATED_VARIANT = gql`
 const GET_HYDRATED_ORDER = gql`
     query GetHydratedOrder($id: ID!) {
         hydrateOrder(id: $id)
+    }
+`;
+const GET_HYDRATED_ORDER_QUANTITIES = gql`
+    query GetHydratedOrderQuantities($id: ID!) {
+        hydrateOrderReturnQuantities(id: $id)
+    }
+`;
+
+const GET_HYDRATED_CHANNEL = gql`
+    query GetHydratedChannel($id: ID!) {
+        hydrateChannel(id: $id)
     }
 `;

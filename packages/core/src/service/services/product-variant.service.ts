@@ -211,7 +211,8 @@ export class ProductVariantService {
             })
             .leftJoin('productvariant.collections', 'collection')
             .leftJoin('productvariant.product', 'product')
-            .andWhere('product.deletedAt IS NULL', { deletedAt: null })
+            .andWhere('product.deletedAt IS NULL')
+            .andWhere('productvariant.deletedAt IS NULL')
             .andWhere('collection.id = :collectionId', { collectionId });
 
         if (options && options.filter && options.filter.enabled && options.filter.enabled.eq === true) {
@@ -355,7 +356,7 @@ export class ProductVariantService {
             ids.push(id);
         }
         const createdVariants = await this.findByIds(ctx, ids);
-        this.eventBus.publish(new ProductVariantEvent(ctx, createdVariants, 'created'));
+        this.eventBus.publish(new ProductVariantEvent(ctx, createdVariants, 'created', input));
         return createdVariants;
     }
 
@@ -370,7 +371,7 @@ export class ProductVariantService {
             ctx,
             input.map(i => i.id),
         );
-        this.eventBus.publish(new ProductVariantEvent(ctx, updatedVariants, 'updated'));
+        this.eventBus.publish(new ProductVariantEvent(ctx, updatedVariants, 'updated', input));
         return updatedVariants;
     }
 
@@ -540,7 +541,7 @@ export class ProductVariantService {
             variant.deletedAt = new Date();
         }
         await this.connection.getRepository(ctx, ProductVariant).save(variants, { reload: false });
-        this.eventBus.publish(new ProductVariantEvent(ctx, variants, 'deleted'));
+        this.eventBus.publish(new ProductVariantEvent(ctx, variants, 'deleted', id));
         return {
             result: DeletionResult.DELETED,
         };

@@ -27,6 +27,7 @@ import { CollectionTranslation } from '../../entity/collection/collection-transl
 import { Collection } from '../../entity/collection/collection.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { EventBus } from '../../event-bus/event-bus';
+import { CollectionEvent } from '../../event-bus/events/collection-event';
 import { CollectionModificationEvent } from '../../event-bus/events/collection-modification-event';
 import { ProductEvent } from '../../event-bus/events/product-event';
 import { ProductVariantEvent } from '../../event-bus/events/product-variant-event';
@@ -293,7 +294,7 @@ export class CollectionService implements OnModuleInit {
         const getChildren = async (id: ID, _descendants: Collection[] = [], depth = 1) => {
             const children = await this.connection
                 .getRepository(ctx, Collection)
-                .find({ where: { parent: { id } } });
+                .find({ where: { parent: { id } }, order: { position: 'ASC' } });
             for (const child of children) {
                 _descendants.push(child);
                 if (depth < maxDepth) {
@@ -369,11 +370,17 @@ export class CollectionService implements OnModuleInit {
             },
         });
         await this.assetService.updateEntityAssets(ctx, collection, input);
-        await this.customFieldRelationService.updateRelations(ctx, Collection, input, collection);
+        const collectionWithRelations = await this.customFieldRelationService.updateRelations(
+            ctx,
+            Collection,
+            input,
+            collection,
+        );
         await this.applyFiltersQueue.add({
             ctx: ctx.serialize(),
             collectionIds: [collection.id],
         });
+        this.eventBus.publish(new CollectionEvent(ctx, collectionWithRelations, 'created', input));
         return assertFound(this.findOne(ctx, collection.id));
     }
 
@@ -403,6 +410,7 @@ export class CollectionService implements OnModuleInit {
             const affectedVariantIds = await this.getCollectionProductVariantIds(collection);
             this.eventBus.publish(new CollectionModificationEvent(ctx, collection, affectedVariantIds));
         }
+        this.eventBus.publish(new CollectionEvent(ctx, collection, 'updated', input));
         return assertFound(this.findOne(ctx, collection.id));
     }
 
@@ -416,6 +424,7 @@ export class CollectionService implements OnModuleInit {
             await this.connection.getRepository(ctx, Collection).remove(coll);
             this.eventBus.publish(new CollectionModificationEvent(ctx, coll, affectedVariantIds));
         }
+        this.eventBus.publish(new CollectionEvent(ctx, collection, 'deleted', id));
         return {
             result: DeletionResult.DELETED,
         };
@@ -613,7 +622,10 @@ export class CollectionService implements OnModuleInit {
             return this.rootCollection;
         }
 
-        const rootTranslation = await this.connection.getRepository(ctx, CollectionTranslation).save(
+        // We purposefully do not use the ctx in saving the new root Collection
+        // so that even if the outer transaction fails, the root collection will still
+        // get persisted.
+        const rootTranslation = await this.connection.getRepository(CollectionTranslation).save(
             new CollectionTranslation({
                 languageCode: this.configService.defaultLanguageCode,
                 name: ROOT_COLLECTION_NAME,
@@ -622,7 +634,7 @@ export class CollectionService implements OnModuleInit {
             }),
         );
 
-        const newRoot = await this.connection.getRepository(ctx, Collection).save(
+        const newRoot = await this.connection.getRepository(Collection).save(
             new Collection({
                 isRoot: true,
                 position: 0,
