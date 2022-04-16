@@ -5,7 +5,6 @@ import { unique } from '@vendure/common/lib/unique';
 
 import { RequestContext } from '../../../api/common/request-context';
 import { InternalServerError } from '../../../common/error/errors';
-import { Translatable } from '../../../common/types/locale-types';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { VendureEntity } from '../../../entity/base/base.entity';
 import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
@@ -218,7 +217,10 @@ export class EntityHydrator {
             const part = path[i];
             const isLast = i === path.length - 1;
             if (relation[part]) {
-                relation = Array.isArray(relation[part]) && !isLast ? relation[part][0] : relation[part];
+                relation =
+                    Array.isArray(relation[part]) && relation[part].length && !isLast
+                        ? relation[part][0]
+                        : relation[part];
             } else {
                 return;
             }

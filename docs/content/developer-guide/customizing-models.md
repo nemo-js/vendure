@@ -81,6 +81,25 @@ The built-in form inputs are listed in the [DefaultFormConfigHash docs]({{< relr
 
 If you want to use a completely custom form input component which is not provided by the Admin UI, you'll need to create a plugin which [extends the Admin UI]({{< relref "extending-the-admin-ui" >}}) with [custom form inputs]({{< relref "custom-form-inputs" >}}). 
 
+## Tabbed custom fields
+
+With a large, complex project, it's common for lots of custom fields to be required. This can get visually noisy in the UI, so Vendure supports tabbed custom fields. Just specify the tab name in the `ui` object, and those fields with the same tab name will be grouped in the UI! The tab name can also be a translation token if you need to support multiple languages.
+
+```TypeScript
+const config = {
+  // ...
+  customFields: {
+    Product: [
+      { name: 'additionalInfo', type: 'text', ui: { component: 'rich-text-form-input' } },
+      { name: 'specs', type: 'text', ui: { component: 'json-editor-form-input' } },
+      { name: 'width', type: 'int', ui: { tab: 'Shipping' } },
+      { name: 'height', type: 'int', ui: { tab: 'Shipping' } },
+      { name: 'depth', type: 'int', ui: { tab: 'Shipping' } },
+      { name: 'weight', type: 'int', ui: { tab: 'Shipping' } },
+    ],
+  },
+}
+```
 
 ## Configurable Order Products
 
@@ -185,6 +204,7 @@ However, this sacrifices type safety. To make our custom fields type-safe we can
 
 ```TypeScript
 // types.ts
+import { CustomProductFields } from '@vendure/core';
 
 declare module '@vendure/core' {
   interface CustomProductFields {
@@ -322,7 +342,7 @@ Some custom fields may be used internally in your business logic, or for integra
 
 * `public: false` means that it will not be exposed via the Shop API.
 * `readonly: true` means it will be exposed, but cannot be updated via the Admin API. It can only be changed programmatically in plugin code.
-* `internal: false` - means the field _will not_ be exposed via either the Shop or Admin GraphQL APIs. Internal custom fields are useful for purely internal implementation details.
+* `internal: false` - means the field _will_ be exposed via the GraphQL APIs (in this case on the Admin API due to the `public: false` setting). If it was set to `internal: true`, then the field would not be exposed _at all_ in either of the GraphQL APIs, and will not be visible in the Admin UI. Internal custom fields are useful for purely internal implementation details.
 
 ```TypeScript
 Customer: [
@@ -333,7 +353,7 @@ Customer: [
     readonly: true,
     internal: false,
   },
-]
+],
 ```
 
 ### Relations
@@ -381,11 +401,7 @@ mutation {
 {{% alert %}}
 **UI for relation type**
 
-The Admin UI app has built-in selection components for "relation" custom fields which reference certain common entity types, such as Asset, Product, ProductVariant and Customer. If you are relating to an entity not covered by the built-in selection components, you will instead see the message:
+The Admin UI app has built-in selection components for "relation" custom fields which reference certain common entity types, such as Asset, Product, ProductVariant and Customer. If you are relating to an entity not covered by the built-in selection components, you will see a generic relation component which allows you to manually enter the ID of the entity you wish to select.
 
-```text
-No input component configured for "<entity>" type
-```
-
-In this case, you will need to create a UI extension which defines a custom field control for that custom field. You can read more about this in the [custom form input guide]({{< relref "custom-form-inputs" >}})
+If the generic selector is not suitable, or is you wish to replace one of the built-in selector components, you can create a UI extension which defines a custom field control for that custom field. You can read more about this in the [custom form input guide]({{< relref "custom-form-inputs" >}})
 {{< /alert >}}

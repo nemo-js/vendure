@@ -27,7 +27,7 @@ export type EntityRelationPaths<T extends VendureEntity> =
     | TripleDotPath;
 
 export type EntityRelationKeys<T extends VendureEntity> = {
-    [K in Extract<keyof T, string>]: Required<T>[K] extends VendureEntity
+    [K in Extract<keyof T, string>]: Required<T>[K] extends VendureEntity | null
         ? K
         : Required<T>[K] extends VendureEntity[]
         ? K
@@ -49,7 +49,9 @@ export type PathsToStringProps2<T extends VendureEntity> = T extends string
     : {
           [K in EntityRelationKeys<T>]: T[K] extends VendureEntity[]
               ? [K, PathsToStringProps1<T[K][number]>]
-              : [K, PathsToStringProps1<T[K]>];
+              : T[K] extends VendureEntity
+              ? [K, PathsToStringProps1<T[K]>]
+              : never;
       }[Extract<EntityRelationKeys<T>, string>];
 
 export type TripleDotPath = `${string}.${string}.${string}`;

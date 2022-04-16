@@ -8,7 +8,7 @@ showtoc: true
 Vendure can support many kinds of payment workflows, such as authorizing and capturing payment in a single step upon checkout or authorizing on checkout and then capturing on fulfillment.
 
 {{< alert "primary" >}}
-For a complete working example of a real payment integration, see the [real-world-vendure Braintree plugin](https://github.com/vendure-ecommerce/real-world-vendure/tree/master/src/plugins/braintree)
+For complete working examples of real payment integrations, see the [payments-plugins](https://github.com/vendure-ecommerce/vendure/tree/master/packages/payments-plugin/src)
 {{< /alert >}}
 
 ## Authorization & Settlement
@@ -243,4 +243,4 @@ The checkout flow works as follows:
 
 When integrating with a system like this, you would need to create a Controller to accept POST redirects from the payment processor (usually a success and a failure URL), as well as serve a POST form on your store frontend.
 
-With a hosted payment form the payment is already authorized by the time the card processor makes the POST request to Vendure, possibly settled even, so the payment handler won't do anything in particular - just return the data it has been passed. The validation of the POST request is done in the controller or service and the payment amount and payment refernce are just passed to the payment handler which passes them on.
+With a hosted payment form the payment is already authorized by the time the card processor makes the POST request to Vendure, possibly settled even, so the payment handler won't do anything in particular - just return the data it has been passed. The validation of the POST request is done in the controller or service and the payment amount and payment reference are just passed to the payment handler which passes them on.

@@ -712,6 +712,7 @@ export const CANCEL_ORDER = gql`
     }
     fragment CanceledOrder on Order {
         id
+        state
         lines {
             quantity
             items {
@@ -932,4 +933,20 @@ export const GET_SHIPPING_METHOD_LIST = gql`
         }
     }
     ${SHIPPING_METHOD_FRAGMENT}
+`;
+
+export const GET_COLLECTIONS = gql`
+    query GetCollections {
+        collections {
+            items {
+                id
+                name
+                position
+                parent {
+                    id
+                    name
+                }
+            }
+        }
+    }
 `;
